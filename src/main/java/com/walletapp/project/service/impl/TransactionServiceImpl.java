@@ -14,6 +14,7 @@ import com.walletapp.project.service.IsolatedTransactionWriter;
 import com.walletapp.project.service.TransactionService;
 import com.walletapp.project.validator.TransactionValidator;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @AllArgsConstructor
 public class TransactionServiceImpl implements TransactionService {
@@ -59,7 +61,9 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public TransactionDto deposit(UUID walletId, BigDecimal amount, UUID requestId) {
+        log.info("Starting deposit: walletId={}, amount={}, requestId={}", walletId, amount, requestId);
         TransactionValidator.validatePositiveAmount(amount);
+
         return getExistingTransaction(requestId).orElseGet(() -> {
             Wallet wallet = walletRepository.findById(walletId)
                     .orElseThrow(() -> new ApiException(ErrorCode.WALLET_NOT_FOUND));
@@ -70,6 +74,7 @@ public class TransactionServiceImpl implements TransactionService {
             updateWalletBalanceOrFail(wallet.getId(), newBalance, wallet.getVersion(), tx.getId());
 
             finalizeTransaction(tx, newBalance);
+            log.info("Deposit successful: txId={}, newBalance={}", tx.getId(), newBalance);
             return TransactionDtoMapper.toDto(tx);
         });
     }
@@ -77,6 +82,7 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public TransactionDto withdraw(UUID walletId, BigDecimal amount, UUID requestId) {
+        log.info("Starting withdrawal: walletId={}, amount={}, requestId={}", walletId, amount, requestId);
         TransactionValidator.validatePositiveAmount(amount);
 
         return getExistingTransaction(requestId).orElseGet(() -> {
@@ -91,6 +97,7 @@ public class TransactionServiceImpl implements TransactionService {
             updateWalletBalanceOrFail(wallet.getId(), newBalance, wallet.getVersion(), tx.getId());
 
             finalizeTransaction(tx, newBalance);
+            log.info("Withdrawal successful: txId={}, newBalance={}", tx.getId(), newBalance);
             return TransactionDtoMapper.toDto(tx);
         });
     }
@@ -98,6 +105,7 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public TransactionDto transfer(UUID fromWalletId, UUID toWalletId, BigDecimal amount, UUID requestId) {
+        log.info("Starting transfer: from={}, to={}, amount={}, requestId={}", fromWalletId, toWalletId, amount, requestId);
         TransactionValidator.validatePositiveAmount(amount);
         TransactionValidator.validateNotSameWallet(fromWalletId, toWalletId);
 
@@ -110,6 +118,7 @@ public class TransactionServiceImpl implements TransactionService {
 
             Transaction outTx = buildTransaction(fromWallet, amount, requestId, TransactionType.TRANSFER_OUT);
             Transaction inTx = buildTransaction(toWallet, amount, null, TransactionType.TRANSFER_IN);
+
             isolatedTransactionWriter.createPendingTransaction(outTx);
             isolatedTransactionWriter.createPendingTransaction(inTx);
 
@@ -122,20 +131,20 @@ public class TransactionServiceImpl implements TransactionService {
             finalizeTransaction(outTx, newFromBalance);
             finalizeTransaction(inTx, newToBalance);
 
+            log.info("Transfer successful: outTxId={}, inTxId={}", outTx.getId(), inTx.getId());
             return TransactionDtoMapper.toDto(outTx);
         });
     }
-
 
     private Optional<TransactionDto> getExistingTransaction(UUID requestId) {
         Optional<Transaction> transaction = transactionRepository.getTransactionByRequestId(requestId);
         return transaction.map(TransactionDtoMapper::toDto);
     }
 
-
     private void updateWalletBalanceOrFail(UUID walletId, BigDecimal newBalance, long version, UUID txId) {
         boolean updated = walletRepository.updateBalance(walletId, newBalance, version);
         if (!updated) {
+            log.warn("Balance update failed for walletId={}, txId={}", walletId, txId);
             isolatedTransactionWriter.updateStatus(txId, TransactionStatus.FAILED);
             throw new ApiException(ErrorCode.INVALID_WALLET_UPDATE);
         }
