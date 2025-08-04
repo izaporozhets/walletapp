@@ -10,6 +10,7 @@ import com.walletapp.project.model.Transaction;
 import com.walletapp.project.model.Wallet;
 import com.walletapp.project.repository.TransactionRepository;
 import com.walletapp.project.repository.WalletRepository;
+import com.walletapp.project.service.IsolatedTransactionWriter;
 import com.walletapp.project.service.TransactionService;
 import com.walletapp.project.validator.TransactionValidator;
 import lombok.AllArgsConstructor;
@@ -26,8 +27,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TransactionServiceImpl implements TransactionService {
 
-    private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
+    private final TransactionRepository transactionRepository;
+    private final IsolatedTransactionWriter isolatedTransactionWriter;
 
     @Override
     @Transactional(readOnly = true)
@@ -46,6 +48,15 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public BigDecimal getBalanceAt(UUID walletId, LocalDateTime timestamp) {
+        return transactionRepository
+                .getLastSuccessfulBefore(walletId, timestamp)
+                .map(Transaction::getBalanceAfterTransaction)
+                .orElseThrow(() -> new ApiException(ErrorCode.TRANSACTION_NOT_FOUND));
+    }
+
+    @Override
     @Transactional
     public TransactionDto deposit(UUID walletId, BigDecimal amount, UUID requestId) {
         TransactionValidator.validatePositiveAmount(amount);
@@ -53,7 +64,7 @@ public class TransactionServiceImpl implements TransactionService {
             Wallet wallet = walletRepository.findById(walletId)
                     .orElseThrow(() -> new ApiException(ErrorCode.WALLET_NOT_FOUND));
             Transaction tx = buildTransaction(wallet, amount, requestId, TransactionType.DEPOSIT);
-            transactionRepository.insert(tx);
+            isolatedTransactionWriter.createPendingTransaction(tx);
 
             BigDecimal newBalance = wallet.getBalance().add(amount);
             updateWalletBalanceOrFail(wallet.getId(), newBalance, wallet.getVersion(), tx.getId());
@@ -64,6 +75,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional
     public TransactionDto withdraw(UUID walletId, BigDecimal amount, UUID requestId) {
         TransactionValidator.validatePositiveAmount(amount);
 
@@ -73,7 +85,7 @@ public class TransactionServiceImpl implements TransactionService {
             TransactionValidator.validateSufficientFunds(wallet.getBalance(), amount);
 
             Transaction tx = buildTransaction(wallet, amount, requestId, TransactionType.WITHDRAWAL);
-            transactionRepository.insert(tx);
+            isolatedTransactionWriter.createPendingTransaction(tx);
 
             BigDecimal newBalance = wallet.getBalance().subtract(amount);
             updateWalletBalanceOrFail(wallet.getId(), newBalance, wallet.getVersion(), tx.getId());
@@ -98,8 +110,8 @@ public class TransactionServiceImpl implements TransactionService {
 
             Transaction outTx = buildTransaction(fromWallet, amount, requestId, TransactionType.TRANSFER_OUT);
             Transaction inTx = buildTransaction(toWallet, amount, null, TransactionType.TRANSFER_IN);
-            transactionRepository.insert(outTx);
-            transactionRepository.insert(inTx);
+            isolatedTransactionWriter.createPendingTransaction(outTx);
+            isolatedTransactionWriter.createPendingTransaction(inTx);
 
             BigDecimal newFromBalance = fromWallet.getBalance().subtract(amount);
             updateWalletBalanceOrFail(fromWallet.getId(), newFromBalance, fromWallet.getVersion(), outTx.getId());
@@ -124,7 +136,7 @@ public class TransactionServiceImpl implements TransactionService {
     private void updateWalletBalanceOrFail(UUID walletId, BigDecimal newBalance, long version, UUID txId) {
         boolean updated = walletRepository.updateBalance(walletId, newBalance, version);
         if (!updated) {
-            transactionRepository.updateStatus(txId, TransactionStatus.FAILED);
+            isolatedTransactionWriter.updateStatus(txId, TransactionStatus.FAILED);
             throw new ApiException(ErrorCode.INVALID_WALLET_UPDATE);
         }
     }
