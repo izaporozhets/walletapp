@@ -6,9 +6,12 @@ import com.walletapp.project.dto.WalletDto;
 import com.walletapp.project.service.TransactionService;
 import com.walletapp.project.service.WalletService;
 import lombok.AllArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,6 +26,14 @@ public class WalletController {
     @GetMapping("/{id}")
     public ResponseEntity<WalletDto> getWallet(@PathVariable UUID id) {
         return ResponseEntity.ok(walletService.getWalletById(id));
+    }
+
+    @GetMapping("/{walletId}/balance-at")
+    public ResponseEntity<BigDecimal> getHistoricalBalance(
+            @PathVariable UUID walletId,
+            @RequestParam("timestamp") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime timestamp) {
+        BigDecimal balance = transactionService.getBalanceAt(walletId, timestamp);
+        return ResponseEntity.ok(balance);
     }
 
     @GetMapping("/all")
