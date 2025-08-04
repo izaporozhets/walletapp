@@ -8,7 +8,6 @@ import com.walletapp.project.repository.mappers.TransactionDbMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -25,8 +24,7 @@ public class TransactionRepository {
     }
 
     public Optional<Transaction> getTransactionByRequestId(UUID id) {
-        Optional<Transaction> transaction = transactionMapper.findByRequestId(id);
-        return transaction;
+        return transactionMapper.findByRequestId(id);
     }
 
     public List<Transaction> getAll() {
