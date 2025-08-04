@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -55,4 +56,17 @@ public interface TransactionDbMapper {
                 WHERE id = #{id}
             """)
     int update(Transaction transaction);
+
+    @Select("""
+                SELECT * FROM transactions
+                WHERE wallet_id = #{walletId}
+                  AND created_at <= #{timestamp}
+                  AND status = 'SUCCESS'
+                ORDER BY created_at DESC
+                LIMIT 1
+            """)
+    Optional<Transaction> findLatestBefore(
+            @Param("walletId") UUID walletId,
+            @Param("timestamp") LocalDateTime timestamp
+    );
 }

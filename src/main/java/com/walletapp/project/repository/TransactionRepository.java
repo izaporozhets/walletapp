@@ -8,6 +8,8 @@ import com.walletapp.project.repository.mappers.TransactionDbMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,6 +52,10 @@ public class TransactionRepository {
         if (affected != 1) {
             throw new ApiException(ErrorCode.DB_TRANSACTION_FAILURE);
         }
+    }
+
+    public Optional<Transaction> getLastSuccessfulBefore(UUID walletId, LocalDateTime timestamp) {
+        return transactionMapper.findLatestBefore(walletId, timestamp);
     }
 
 }
