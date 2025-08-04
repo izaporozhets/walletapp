@@ -29,9 +29,7 @@ public class WalletController {
     }
 
     @GetMapping("/{walletId}/balance-at")
-    public ResponseEntity<BigDecimal> getHistoricalBalance(
-            @PathVariable UUID walletId,
-            @RequestParam("timestamp") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime timestamp) {
+    public ResponseEntity<BigDecimal> getHistoricalBalance(@PathVariable UUID walletId, @RequestParam("timestamp") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime timestamp) {
         BigDecimal balance = transactionService.getBalanceAt(walletId, timestamp);
         return ResponseEntity.ok(balance);
     }
@@ -55,8 +53,7 @@ public class WalletController {
 
     @PostMapping("/transfer")
     public ResponseEntity<TransactionDto> transfer(@RequestBody TransactionActionRequest request) {
-        TransactionDto transactionDto = transactionService.transfer(request.getFromWalletId(), request.getToWalletId(),
-                request.getAmount(), request.getRequestId());
+        TransactionDto transactionDto = transactionService.transfer(request.getFromWalletId(), request.getToWalletId(), request.getAmount(), request.getRequestId());
         return ResponseEntity.ok(transactionDto);
     }
 }

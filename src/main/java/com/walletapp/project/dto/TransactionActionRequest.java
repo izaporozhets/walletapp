@@ -13,9 +13,14 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TransactionActionRequest {
+
     private UUID walletId;
+
     private UUID fromWalletId;
+
     private UUID toWalletId;
+
     private BigDecimal amount;
+
     private UUID requestId;
 }
